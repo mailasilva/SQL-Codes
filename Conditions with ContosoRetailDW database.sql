@@ -175,7 +175,7 @@ SELECT
 FROM 
     DimProduct
 
--- Resolution previous exercise but using variables
+-- Previous exercise using variables
 
 
 DECLARE @VARDELUXE FLOAT = 0.09 , @VARREGULAR FLOAT = 0.07, @VARECONOMY FLOAT = 0.05
