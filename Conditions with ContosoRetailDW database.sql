@@ -99,8 +99,8 @@ FROM
     DimProduct dp
 INNER JOIN DimProductSubcategory dpsc
     ON dp.ProductSubcategoryKey = dpsc.ProductSubcategoryKey
-    INNER JOIN DimProductCategory
-        ON dpsc.ProductCategoryKey = DimProductCategory.ProductCategoryKey
+    INNER JOIN DimProductCategory dpc
+        ON dpsc.ProductCategoryKey = dpc.ProductCategoryKey
 
 
 -- IIF Function:
