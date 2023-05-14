@@ -1,0 +1,252 @@
+--Select all the data
+
+SELECT *
+FROM housing..NashvilleHousing
+
+
+/*
+Cleaning Data in SQL Queries
+*/
+
+--------------------------------------------------------------------------------------------------------------------------
+
+-- Standardize Date Format
+
+ALTER TABLE housing..NashvilleHousing
+Add SaleDateConverted Date; --Add a new column
+
+Update housing..NashvilleHousing
+SET SaleDateConverted = CONVERT(Date,SaleDate) --Update the column with the new date data type
+
+
+ --------------------------------------------------------------------------------------------------------------------------
+
+-- Populate Property Address data
+--Some of the property adresses are missing. However, each ParcelId had its unique adress that we can use to fill into the missing fields
+Select a.ParcelID, a.PropertyAddress, b.ParcelID, b.PropertyAddress, ISNULL(a.PropertyAddress,b.PropertyAddress)
+From housing.dbo.NashvilleHousing a
+JOIN housing.dbo.NashvilleHousing b
+	on a.ParcelID = b.ParcelID
+	AND a.[UniqueID ] <> b.[UniqueID ]
+Where a.PropertyAddress is null
+
+
+Update a
+SET PropertyAddress = ISNULL(a.PropertyAddress,b.PropertyAddress)
+From housing.dbo.NashvilleHousing a
+JOIN housing.dbo.NashvilleHousing b
+	on a.ParcelID = b.ParcelID
+	AND a.[UniqueID ] <> b.[UniqueID ]
+Where a.PropertyAddress is null
+
+
+
+
+--------------------------------------------------------------------------------------------------------------------------
+
+-- Breaking out Address into Individual Columns (Address, City, State): Seperate by delimter
+
+-- Two different ways to split a string
+
+--First method is to use the substring function
+ALTER TABLE housing..NashvilleHousing
+Add PropertySplitAddress Nvarchar(255); --Add new column to the table
+
+Update housing..NashvilleHousing
+SET PropertySplitAddress = SUBSTRING(PropertyAddress, 1, CHARINDEX(',', PropertyAddress) -1 )
+
+
+ALTER TABLE housing..NashvilleHousing
+Add PropertySplitCity Nvarchar(255);
+
+Update housing..NashvilleHousing
+SET PropertySplitCity = SUBSTRING(PropertyAddress, CHARINDEX(',', PropertyAddress) + 1 , LEN(PropertyAddress))
+
+
+--Second Method is to use the parsename function
+Select
+OwnerAddress,
+PARSENAME(REPLACE(OwnerAddress, ',', '.') , 3)
+,PARSENAME(REPLACE(OwnerAddress, ',', '.') , 2)
+,PARSENAME(REPLACE(OwnerAddress, ',', '.') , 1)
+From housing.dbo.NashvilleHousing
+
+Select
+PARSENAME(REPLACE(ParcelID, '.','.'), 2)
+From housing..NashvilleHousing
+
+ALTER TABLE housing..NashvilleHousing
+Add OwnerSplitAddress Nvarchar(255);
+
+Update housing..NashvilleHousing
+SET OwnerSplitAddress = PARSENAME(REPLACE(OwnerAddress, ',', '.') , 3)
+
+
+ALTER TABLE housing..NashvilleHousing
+Add OwnerSplitCity Nvarchar(255);
+
+Update housing..NashvilleHousing
+SET OwnerSplitCity = PARSENAME(REPLACE(OwnerAddress, ',', '.') , 2)
+
+
+
+ALTER TABLE housing..NashvilleHousing
+Add OwnerSplitState Nvarchar(255);
+
+Update housing..NashvilleHousing
+SET OwnerSplitState = PARSENAME(REPLACE(OwnerAddress, ',', '.') , 1)
+
+
+
+
+--------------------------------------------------------------------------------------------------------------------------
+--Drop the last two digits of the parcelID since they are unnecessary
+
+Select
+ParcelID,
+PARSENAME(REPLACE(ParcelID, '.','.'), 2)
+From housing..NashvilleHousing
+
+
+ALTER TABLE housing..NashvilleHousing
+ADD ParcelIDSplit Nvarchar(255);
+
+Update housing..NashvilleHousing
+SET ParcelIDSplit = PARSENAME(REPLACE(ParcelID, '.','.'), 2)
+
+
+
+
+--------------------------------------------------------------------------------------------------------------------------
+
+
+-- Change Y and N to Yes and No in "Sold as Vacant" field
+
+
+Select Distinct(SoldAsVacant), Count(SoldAsVacant)
+From housing..NashvilleHousing
+Group by SoldAsVacant
+order by 2
+--More yes/no then y/n so we will switch all the yes to y and so on
+
+
+Update housing..NashvilleHousing
+SET SoldAsVacant = CASE When SoldAsVacant = 'Y' THEN 'Yes'
+	   When SoldAsVacant = 'N' THEN 'No'
+	   ELSE SoldAsVacant
+	   END
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+-- Remove Duplicates
+
+--Create a CTE
+WITH RowNumCTE AS(
+Select *,
+	ROW_NUMBER() OVER (
+	PARTITION BY ParcelID,
+				 PropertyAddress,
+				 SalePrice,
+				 SaleDate,
+				 LegalReference
+				 ORDER BY
+					UniqueID
+					) row_num
+From housing..NashvilleHousing
+)
+Select *
+From RowNumCTE
+Where row_num > 1
+Order by PropertyAddress
+--Counts the number of unique ID are doubles
+
+
+--Delete all of teh duplicates
+WITH RowNumCTE AS(
+Select *,
+	ROW_NUMBER() OVER (
+	PARTITION BY ParcelID,
+				 PropertyAddress,
+				 SalePrice,
+				 SaleDate,
+				 LegalReference
+				 ORDER BY
+					UniqueID
+					) row_num
+From housing..NashvilleHousing
+)
+Delete
+From RowNumCTE
+Where row_num > 1
+
+
+
+
+---------------------------------------------------------------------------------------------------------
+
+-- Delete Unused Columns
+
+ALTER TABLE housing..NashvilleHousing
+DROP COLUMN OwnerAddress, TaxDistrict, PropertyAddress, SaleDate, ParcelID
+
+Select *
+From housing..NashvilleHousing
+
+----------------------------------------------------------------------------------------------------------
+-- Data exploration
+
+
+--Find the avergae value of a house by year
+
+Select Distinct(YearBuilt), Avg(TotalValue) as AverageValue
+From housing..NashvilleHousing
+Group by YearBuilt
+Order by YearBuilt Desc
+
+--Avergae value of a house base on number of bedrooms and bathrooms
+
+Select Bedrooms, FullBath, AVG(TotalValue) as AvgValue
+From housing..NashvilleHousing
+Group by Bedrooms, FullBath
+Order by AvgValue Desc
+
+
+--See the effect total acreage has on house value
+
+Select Acreage, AVG(TotalValue) as AvgValue
+From housing..NashvilleHousing
+GROUP BY Acreage
+Order by Acreage Desc
+
+-- Does the city a house is located have an effect on the total value of a house
+
+SELECT PropertySplitCity, AVG(TotalValue) as AvgValue
+FROM housing..NashvilleHousing
+GROUP BY PropertySplitCity
+ORDER BY AvgValue DESC
+
+
+-- Check which month sold the most amount of houses
+
+--We need to creat new column that extrats only the month sold
+ALTER TABLE NashvilleHousing
+ADD MonthSold Nvarchar(255);
+
+Update NashvilleHousing
+SET MonthSold = PARSENAME(REPLACE(SaleDateConverted, '-','.'), 2)
+
+SELECT MonthSold, COUNT(*) as NumHousesSold
+FROM housing..NashvilleHousing
+GROUP BY MonthSold
+ORDER BY NumHousesSold DESC
+
+--Total Value vs Sold value
+
+SELECT SalePrice, TotalValue, (SalePrice - TotalValue) AS Diff
+FROM housing..NashvilleHousing
+
+--LandType vs Total Value
+SELECT LandUse, AVG(TotalValue) as AvgVal
+FROM housing..NashvilleHousing
+GROUP BY LandUse
+ORDER BY AvgVal DESC
